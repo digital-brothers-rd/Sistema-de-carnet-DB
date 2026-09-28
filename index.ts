@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    const supabaseUrl = Deno.env.get("tqkapzhszgykwdrjonza.supabase.co")!;
+    const supabaseUrl = Deno.env.get("https://tqkapzhszgykwdrjonza.supabase.co")!;
     const anonKey = Deno.env.get("sb_publishable_n18qRbCf8nBsJDXAZSxEfQ_ZCo1-i4y")!;
     const serviceKey = Deno.env.get("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxa2Fwemhzemd5a3dkcmpvbnphIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDYxMzkzNiwiZXhwIjoyMTA2MTg5OTM2fQ.qftr6Ky3l4Fc3ekyGLgri0UNe1xh4fNB4LdPCG013Gc")!;
 
