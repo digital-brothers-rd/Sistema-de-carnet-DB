@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carnets · Digital Brothers RD</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: { sans: ['Space Grotesk','system-ui','sans-serif'], mono: ['IBM Plex Mono','ui-monospace','monospace'] },
+    colors: { ink:'#0e1218', panel:'#151b24', line:'#252e3c', mute:'#8792a4', brand:'#4cc2ff' }
+  }}}
+</script>
+<style>
+  .carnet-print { background: linear-gradient(135deg,#151b24 60%,#1b2a3a); }
+  @media print {
+    body * { visibility: hidden; }
+    #carnet-card, #carnet-card * { visibility: visible; }
+    #carnet-card { position: fixed; inset: 0; margin: auto; height: fit-content; }
+  }
+</style>
+</head>
+<body class="bg-ink text-slate-200 font-sans min-h-screen">
+
+<!-- LOGIN -->
+<section id="login" class="hidden min-h-screen items-center justify-center p-6">
+  <div class="w-full max-w-sm bg-panel border border-line rounded-lg p-6">
+    <h1 class="text-xl font-bold text-white">Digital Brothers RD</h1>
+    <p class="text-sm text-mute mt-1 mb-5">Inicia sesión para ver tu carnet o gestionar el equipo.</p>
+    <input id="l-email" type="email" placeholder="Correo" class="w-full mb-3 bg-ink border border-line rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
+    <input id="l-pass" type="password" placeholder="Contraseña" class="w-full mb-3 bg-ink border border-line rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
+    <p id="l-err" class="text-sm text-red-400 mb-3 hidden"></p>
+    <button id="l-btn" class="w-full bg-brand text-ink font-medium rounded py-2 hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-white">Iniciar sesión</button>
+    <button id="l-olvide" type="button" class="w-full text-center text-xs text-mute hover:text-white mt-3">¿Olvidaste tu contraseña?</button>
+  </div>
+</section>
+
+<!-- RECUPERAR CONTRASEÑA: pedir el correo -->
+<section id="recuperar" class="hidden min-h-screen items-center justify-center p-6">
+  <div class="w-full max-w-sm bg-panel border border-line rounded-lg p-6">
+    <h1 class="text-xl font-bold text-white">Recuperar acceso</h1>
+    <p class="text-sm text-mute mt-1 mb-5">Te enviaremos un enlace a tu correo para definir una nueva contraseña.</p>
+    <input id="r-email" type="email" placeholder="Correo" class="w-full mb-3 bg-ink border border-line rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
+    <p id="r-msg" class="text-sm mb-3 min-h-[1.25rem]"></p>
+    <button id="r-btn" class="w-full bg-brand text-ink font-medium rounded py-2 hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-white">Enviar enlace</button>
+    <button id="r-volver" type="button" class="w-full text-center text-xs text-mute hover:text-white mt-3">Volver a iniciar sesión</button>
+  </div>
+</section>
+
+<!-- RECUPERAR CONTRASEÑA: definir una nueva (se abre desde el enlace del correo) -->
+<section id="nueva-contrasena" class="hidden min-h-screen items-center justify-center p-6">
+  <div class="w-full max-w-sm bg-panel border border-line rounded-lg p-6">
+    <h1 class="text-xl font-bold text-white">Define tu nueva contraseña</h1>
+    <p class="text-sm text-mute mt-1 mb-5">Mínimo 8 caracteres.</p>
+    <input id="n-pass" type="password" placeholder="Nueva contraseña" minlength="8" class="w-full mb-3 bg-ink border border-line rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
+    <p id="n-err" class="text-sm text-red-400 mb-3 hidden"></p>
+    <button id="n-btn" class="w-full bg-brand text-ink font-medium rounded py-2 hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-white">Guardar contraseña</button>
+  </div>
+</section>
+
+<!-- VISTA COLABORADOR: solo su propio carnet -->
+<main id="vista-colaborador" class="hidden max-w-sm mx-auto px-4 py-10">
+  <div class="flex items-center justify-between mb-6">
+    <p class="text-sm text-mute">Digital Brothers RD</p>
+    <button id="logout-colab" class="text-sm text-mute hover:text-white border border-line rounded px-3 py-1.5">Cerrar sesión</button>
+  </div>
+  <div id="carnet-propio"></div>
+</main>
+
+<!-- VISTA ADMIN -->
+<main id="app" class="hidden max-w-5xl mx-auto px-4 py-8">
+  <header class="flex items-center justify-between mb-8">
+    <div>
+      <h1 class="text-2xl font-bold text-white">Carnets del equipo</h1>
+      <p class="text-sm text-mute">Digital Brothers RD</p>
+    </div>
+    <button id="logout" class="text-sm text-mute hover:text-white border border-line rounded px-3 py-1.5">Cerrar sesión</button>
+  </header>
+
+  <form id="form" class="bg-panel border border-line rounded-lg p-4 mb-8">
+    <p class="text-sm font-medium text-white mb-3">Registrar nuevo colaborador</p>
+    <div class="grid gap-3 sm:grid-cols-2">
+      <label class="text-sm">
+        <span class="text-mute">Nombre completo</span>
+        <input name="nombre" required maxlength="120" class="mt-1 w-full bg-ink border border-line rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand">
+      </label>
+      <label class="text-sm">
+        <span class="text-mute">Cargo</span>
+        <input name="cargo" required maxlength="80" class="mt-1 w-full bg-ink border border-line rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand">
+      </label>
+      <label class="text-sm">
+        <span class="text-mute">Correo de acceso</span>
+        <input name="email" type="email" required class="mt-1 w-full bg-ink border border-line rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand">
+      </label>
+      <label class="text-sm">
+        <span class="text-mute">Contraseña temporal</span>
+        <div class="mt-1 flex gap-2">
+          <input name="password" required minlength="8" class="w-full bg-ink border border-line rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand">
+          <button type="button" id="gen-pass" class="text-xs text-mute hover:text-white border border-line rounded px-3 whitespace-nowrap">Generar</button>
+        </div>
+      </label>
+    </div>
+    <button class="mt-4 bg-brand text-ink font-medium rounded px-4 py-2 hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-white">Crear acceso y emitir carnet</button>
+  </form>
+
+  <div class="bg-panel border border-line rounded-lg overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="text-left text-mute border-b border-line">
+        <tr>
+          <th class="px-4 py-3 font-medium">ID</th>
+          <th class="px-4 py-3 font-medium">Nombre</th>
+          <th class="px-4 py-3 font-medium">Cargo</th>
+          <th class="px-4 py-3 font-medium">Emisión</th>
+          <th class="px-4 py-3 font-medium">Carnet</th>
+          <th class="px-4 py-3 font-medium">Acceso</th>
+          <th class="px-4 py-3 font-medium text-right">Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <p id="msg" class="text-sm mt-3 min-h-[1.25rem]" role="status"></p>
+</main>
+
+<!-- DETALLE / CARNET -->
+<div id="modal" class="hidden fixed inset-0 bg-black/70 items-center justify-center p-4 z-10">
+  <div class="w-full max-w-sm">
+    <div id="carnet-card" class="carnet-print border border-line rounded-xl p-6">
+      <p class="text-brand text-sm font-medium">Digital Brothers RD</p>
+      <p id="d-nombre" class="text-2xl font-bold text-white mt-6"></p>
+      <p id="d-cargo" class="text-mute mt-1"></p>
+      <div class="flex items-end justify-between mt-8">
+        <div>
+          <p id="d-id" class="font-mono text-lg text-white"></p>
+          <p id="d-fecha" class="text-xs text-mute mt-1"></p>
+        </div>
+        <span id="d-estado" class="text-xs font-medium px-2 py-1 rounded"></span>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-3">
+      <button id="d-print" class="flex-1 bg-panel border border-line rounded py-2 text-sm hover:border-brand">Imprimir</button>
+      <button id="d-close" class="flex-1 bg-panel border border-line rounded py-2 text-sm hover:border-brand">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ====== CONFIGURA ESTOS DOS VALORES (Supabase → Project Settings → API) ======
+const SUPABASE_URL = 'https://TU-PROYECTO.supabase.co';
+const SUPABASE_ANON_KEY = 'TU_ANON_KEY';
+// ==============================================================================
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let data = [];
+let miUserId = null;
+
+function say(text, error = false) {
+  $('msg').textContent = text;
+  $('msg').className = 'text-sm mt-3 min-h-[1.25rem] ' + (error ? 'text-red-400' : 'text-emerald-400');
+}
+
+function badge(estado) {
+  return estado === 'Activo'
+    ? 'bg-emerald-500/15 text-emerald-300'
+    : 'bg-amber-500/15 text-amber-300';
+}
+
+function cardHTML(r) {
+  return `
+    <div class="carnet-print border border-line rounded-xl p-6">
+      <p class="text-brand text-sm font-medium">Digital Brothers RD</p>
+      <p class="text-2xl font-bold text-white mt-6">${esc(r.nombre_completo)}</p>
+      <p class="text-mute mt-1">${esc(r.cargo)}</p>
+      <div class="flex items-end justify-between mt-8">
+        <div>
+          <p class="font-mono text-lg text-white">${esc(r.id_unico)}</p>
+          <p class="text-xs text-mute mt-1">Emitido el ${esc(r.fecha_emision)}</p>
+        </div>
+        <span class="text-xs font-medium px-2 py-1 rounded ${badge(r.estado)}">${esc(r.estado)}</span>
+      </div>
+    </div>
+    <button id="print-propio" class="w-full mt-3 bg-panel border border-line rounded py-2 text-sm hover:border-brand">Imprimir</button>`;
+}
+
+// ---- Tabla (vista admin) ----
+function render() {
+  if (!data.length) {
+    $('rows').innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-mute">Aún no hay carnets. Registra al primer colaborador arriba.</td></tr>';
+    return;
+  }
+  $('rows').innerHTML = data.map(r => `
+    <tr class="border-b border-line last:border-0 hover:bg-white/[0.02]">
+      <td class="px-4 py-3 font-mono text-white whitespace-nowrap">${esc(r.id_unico)}</td>
+      <td class="px-4 py-3">${esc(r.nombre_completo)}</td>
+      <td class="px-4 py-3 text-mute">${esc(r.cargo)}</td>
+      <td class="px-4 py-3 text-mute whitespace-nowrap">${esc(r.fecha_emision)}</td>
+      <td class="px-4 py-3"><span class="text-xs font-medium px-2 py-1 rounded ${badge(r.estado)}">${esc(r.estado)}</span></td>
+      <td class="px-4 py-3">${accesoCell(r)}</td>
+      <td class="px-4 py-3 text-right whitespace-nowrap">
+        <button data-act="ver" data-id="${r.id}" class="text-brand hover:underline mr-3">Ver detalle</button>
+        <button data-act="toggle" data-id="${r.id}" class="text-mute hover:text-white hover:underline mr-3">
+          ${r.estado === 'Activo' ? 'Revocar' : 'Reactivar'} carnet
+        </button>
+        ${accesoBtn(r)}
+      </td>
+    </tr>`).join('');
+}
+
+function accesoCell(r) {
+  if (!r.user_id) return '<span class="text-xs text-mute">Sin login</span>';
+  const activo = r.acceso !== 'Suspendido';
+  return `<span class="text-xs font-medium px-2 py-1 rounded ${activo ? 'bg-emerald-500/15 text-emerald-300' : 'bg-red-500/15 text-red-300'}">${activo ? 'Activo' : 'Suspendido'}</span>`;
+}
+
+function accesoBtn(r) {
+  if (!r.user_id || r.user_id === miUserId) return '';
+  const activo = r.acceso !== 'Suspendido';
+  return `<button data-act="acceso" data-userid="${r.user_id}" data-nuevo="${activo ? 'suspender' : 'reactivar'}" class="text-mute hover:text-white hover:underline">
+    ${activo ? 'Suspender' : 'Reactivar'} acceso
+  </button>`;
+}
+
+async function load() {
+  const [{ data: rows, error }, { data: perfiles, error: perfilesErr }] = await Promise.all([
+    db.from('empleados_carnets').select('*').order('created_at', { ascending: false }),
+    db.from('profiles').select('id, acceso'),
+  ]);
+  if (error) return say('No se pudieron cargar los carnets: ' + error.message, true);
+  if (perfilesErr) return say('No se pudo cargar el acceso de los colaboradores: ' + perfilesErr.message, true);
+  const accesoPorId = Object.fromEntries(perfiles.map(p => [p.id, p.acceso]));
+  data = rows.map(r => ({ ...r, acceso: r.user_id ? accesoPorId[r.user_id] : null }));
+  render();
+}
+
+$('gen-pass').addEventListener('click', () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const val = Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  $('form').password.value = val;
+  $('form').password.type = 'text';
+});
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target;
+  const btn = f.querySelector('button[type=submit]');
+  btn.disabled = true;
+  btn.textContent = 'Creando...';
+
+  const { data: result, error } = await db.functions.invoke('crear-colaborador', {
+    body: {
+      email: f.email.value.trim(),
+      password: f.password.value,
+      nombre_completo: f.nombre.value.trim(),
+      cargo: f.cargo.value.trim(),
+    },
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Crear acceso y emitir carnet';
+
+  if (error || result?.error) {
+    return say('No se pudo crear el colaborador: ' + (result?.error || error.message), true);
+  }
+  f.reset();
+  say(`Colaborador creado. Carnet emitido: ${result.carnet.id_unico}`);
+  load();
+});
+
+$('rows').addEventListener('click', async e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+
+  if (btn.dataset.act === 'acceso') {
+    const accion = btn.dataset.nuevo; // 'suspender' | 'reactivar'
+    if (accion === 'suspender' && !confirm('¿Suspender el acceso de este colaborador? No podrá iniciar sesión hasta que lo reactives.')) return;
+    btn.disabled = true;
+    const { data: result, error } = await db.functions.invoke('alternar-acceso', {
+      body: { user_id: btn.dataset.userid, accion },
+    });
+    if (error || result?.error) {
+      btn.disabled = false;
+      return say('No se pudo cambiar el acceso: ' + (result?.error || error.message), true);
+    }
+    say(`Acceso ${result.acceso === 'Activo' ? 'reactivado' : 'suspendido'}.`);
+    return load();
+  }
+
+  const r = data.find(x => x.id === btn.dataset.id);
+  if (btn.dataset.act === 'ver') return openDetail(r);
+  if (btn.dataset.act === 'toggle') {
+    const nuevo = r.estado === 'Activo' ? 'Inactivo' : 'Activo';
+    if (nuevo === 'Inactivo' && !confirm(`¿Revocar el carnet ${r.id_unico} de ${r.nombre_completo}?`)) return;
+    const { error } = await db.from('empleados_carnets').update({ estado: nuevo }).eq('id', r.id);
+    if (error) return say('No se pudo cambiar el estado: ' + error.message, true);
+    say(`Carnet ${r.id_unico} ${nuevo === 'Activo' ? 'reactivado' : 'revocado'}.`);
+    load();
+  }
+});
+
+function openDetail(r) {
+  $('d-nombre').textContent = r.nombre_completo;
+  $('d-cargo').textContent = r.cargo;
+  $('d-id').textContent = r.id_unico;
+  $('d-fecha').textContent = 'Emitido el ' + r.fecha_emision;
+  $('d-estado').textContent = r.estado;
+  $('d-estado').className = 'text-xs font-medium px-2 py-1 rounded ' + badge(r.estado);
+  $('modal').classList.replace('hidden', 'flex');
+}
+$('d-close').onclick = () => $('modal').classList.replace('flex', 'hidden');
+$('d-print').onclick = () => window.print();
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('d-close').click(); });
+
+// ---- Vista colaborador: carga solo su propio carnet ----
+async function loadCarnetPropio() {
+  const { data: rows, error } = await db.from('empleados_carnets').select('*').limit(1);
+  if (error || !rows?.length) {
+    $('carnet-propio').innerHTML = `<p class="text-mute text-sm">Aún no tienes un carnet emitido. Contacta a un administrador.</p>`;
+    return;
+  }
+  $('carnet-propio').innerHTML = cardHTML(rows[0]);
+  $('print-propio').onclick = () => window.print();
+}
+
+// ---- Sesión y enrutado por rol ----
+const SECCIONES = ['login', 'recuperar', 'nueva-contrasena', 'vista-colaborador', 'app'];
+function ocultarTodo() {
+  SECCIONES.forEach(id => {
+    $(id).classList.add('hidden');
+    $(id).classList.remove('flex');
+  });
+}
+function mostrar(id) {
+  ocultarTodo();
+  $(id).classList.remove('hidden');
+  $(id).classList.add('flex');
+}
+
+async function showApp(session) {
+  if (!session) return mostrar('login');
+  const { data: perfil, error } = await db.from('profiles').select('rol').eq('id', session.user.id).single();
+  if (error || !perfil) {
+    // Login sin perfil asociado: no debería pasar salvo el admin recién creado a mano
+    mostrar('login');
+    $('l-err').textContent = 'Tu cuenta no tiene un perfil asignado. Contacta al administrador.';
+    $('l-err').classList.remove('hidden');
+    return;
+  }
+  miUserId = session.user.id;
+  if (perfil.rol === 'admin') {
+    mostrar('app');
+    load();
+  } else {
+    mostrar('vista-colaborador');
+    loadCarnetPropio();
+  }
+}
+
+$('l-btn').onclick = async () => {
+  const { error } = await db.auth.signInWithPassword({ email: $('l-email').value, password: $('l-pass').value });
+  $('l-err').textContent = error ? 'Correo o contraseña incorrectos.' : '';
+  $('l-err').classList.toggle('hidden', !error);
+};
+$('logout').onclick = () => db.auth.signOut();
+$('logout-colab').onclick = () => db.auth.signOut();
+
+// ---- Recuperar contraseña ----
+$('l-olvide').onclick = () => mostrar('recuperar');
+$('r-volver').onclick = () => mostrar('login');
+
+$('r-btn').onclick = async () => {
+  const email = $('r-email').value.trim();
+  if (!email) return;
+  $('r-btn').disabled = true;
+  await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
+  $('r-btn').disabled = false;
+  // Mensaje genérico a propósito: no confirma si el correo existe en el sistema
+  $('r-msg').textContent = 'Si ese correo tiene una cuenta, te llegará un enlace para definir una nueva contraseña.';
+  $('r-msg').className = 'text-sm mb-3 min-h-[1.25rem] text-emerald-400';
+};
+
+$('n-btn').onclick = async () => {
+  const pass = $('n-pass').value;
+  if (pass.length < 8) {
+    $('n-err').textContent = 'La contraseña debe tener al menos 8 caracteres.';
+    $('n-err').classList.remove('hidden');
+    return;
+  }
+  $('n-btn').disabled = true;
+  const { error } = await db.auth.updateUser({ password: pass });
+  $('n-btn').disabled = false;
+  if (error) {
+    $('n-err').textContent = 'No se pudo guardar la contraseña: ' + error.message;
+    $('n-err').classList.remove('hidden');
+    return;
+  }
+  $('n-pass').value = '';
+  const { data } = await db.auth.getSession();
+  showApp(data.session);
+};
+
+db.auth.onAuthStateChange((evt, session) => {
+  if (evt === 'PASSWORD_RECOVERY') return mostrar('nueva-contrasena');
+  showApp(session);
+});
+db.auth.getSession().then(({ data }) => showApp(data.session));
+</script>
+</body>
+</html>
